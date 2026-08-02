@@ -6,7 +6,6 @@ import { convertFileSrc, invoke } from '@tauri-apps/api/core'
 import { listen } from '@tauri-apps/api/event'
 import { getCurrentWebview } from '@tauri-apps/api/webview'
 import { open as openDialog } from '@tauri-apps/plugin-dialog'
-import { readTextFile } from '@tauri-apps/plugin-fs'
 import {
   BookOpen,
   ChevronRight,
@@ -211,7 +210,9 @@ function App() {
     }
 
     try {
-      const text = await readTextFile(path)
+      const text = isTauriRuntime()
+        ? await invoke<string>('read_markdown_file', { path })
+        : await fetch(path).then((response) => response.text())
       const name = path.split(/[\\/]/).pop() ?? 'Untitled.md'
       await loadText(text, name, path)
     } catch (cause) {
