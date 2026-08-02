@@ -57,6 +57,10 @@ button { cursor: pointer; }
 .toolbar-button.primary:hover { filter: brightness(1.06); }
 .icon-button { width: 34px; height: 34px; border-radius: 6px; justify-content: center; text-decoration: none; }
 .icon-button:hover { color: var(--text); background: var(--surface-muted); border-color: var(--line); }
+.language-toggle { height: 34px; display: inline-flex; align-items: center; gap: 5px; padding: 0 9px; border: 1px solid var(--line); border-radius: 6px; color: var(--muted); background: var(--surface); font-size: 11px; font-weight: 700; }
+.language-toggle:hover { color: var(--text); background: var(--surface-muted); }
+.language-toggle .active { color: var(--accent); }
+.language-divider { color: var(--line); font-weight: 500; }
 
 .workspace { display: flex; flex: 1; min-height: 0; }
 .outline-panel { width: 248px; flex: 0 0 248px; border-right: 1px solid var(--line); background: var(--surface); padding: 22px 14px; box-sizing: border-box; transition: width 160ms ease, flex-basis 160ms ease, padding 160ms ease; overflow: hidden; }
@@ -106,7 +110,7 @@ button { cursor: pointer; }
 .statusbar { height: 30px; flex-shrink: 0; justify-content: space-between; padding: 0 16px; border-top: 1px solid var(--line); color: var(--muted); background: var(--surface-muted); font-size: 10px; letter-spacing: .01em; }
 
 @media (max-width: 720px) {
-  .topbar { padding: 0 12px; }.brand-caption { display: none; }.toolbar-button span { display: none; }.toolbar-button { width: 34px; height: 34px; padding: 0; justify-content: center; }
+  .topbar { padding: 0 12px; }.brand-caption { display: none; }.toolbar-button span { display: none; }.toolbar-button { width: 34px; height: 34px; padding: 0; justify-content: center; }.language-toggle { padding: 0 7px; }
   .outline-panel { position: absolute; z-index: 2; height: calc(100vh - 88px); box-shadow: 8px 0 24px rgb(0 0 0 / 8%); }.outline-panel.collapsed { display: none; }
   .document-meta, .drop-banner, .error-banner, .markdown-body { padding-left: 18px; padding-right: 18px; }.markdown-body { padding-top: 34px; font-size: 16px; }.markdown-body h1 { font-size: 31px; }
   .statusbar { padding: 0 10px; }.statusbar span:last-child { display: none; }

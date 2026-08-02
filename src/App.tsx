@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState, type DragEvent, type ReactNode } from 'react'
+import { useEffect, useMemo, useRef, useState, type DragEvent, type ReactNode } from 'react'
 import ReactMarkdown from 'react-markdown'
 import rehypeHighlight from 'rehype-highlight'
 import remarkGfm from 'remark-gfm'
@@ -11,6 +11,7 @@ import {
   FileText,
   FolderOpen,
   GitBranch,
+  Languages,
   List,
   Moon,
   PanelLeft,
@@ -20,8 +21,9 @@ import {
 import './App.css'
 
 type TocItem = { id: string; label: string; level: number }
+type Language = 'zh' | 'en'
 
-const SAMPLE_MARKDOWN = `# Welcome to MDreader
+const SAMPLE_MARKDOWN_EN = `# Welcome to MDreader
 
 A quiet, local-first Markdown reading space for notes, documentation, and long-form writing.
 
@@ -51,6 +53,84 @@ console.log('Markdown feels ' + reading + ' here.')
 | Themes | Ready |
 | Editing | Coming next |
 `
+
+const SAMPLE_MARKDOWN_ZH = `# 欢迎使用 MDreader
+
+一个安静、以本地为主的 Markdown 阅读空间，适合笔记、文档和长篇写作。
+
+## 从文件开始
+
+打开电脑中的 **.md** 或 **.markdown** 文件，或者将文件拖到窗口中的任意位置。你的文档始终留在本地。
+
+## 支持的功能
+
+- GitHub Flavored Markdown 表格和任务列表
+- 带语法高亮的代码块
+- 相对路径图片和链接
+- 自动生成目录，快速跳转
+
+> 提示：长文档可以使用左侧目录快速浏览章节。
+
+### 一个小例子
+
+~~~ts
+const reading = 'focused'
+console.log('Markdown feels ' + reading + ' here.')
+~~~
+
+| 功能 | 状态 |
+| --- | --- |
+| 本地文件 | 已支持 |
+| 主题切换 | 已支持 |
+| 编辑功能 | 即将推出 |
+`
+
+const COPY = {
+  en: {
+    brandCaption: 'local Markdown',
+    openFile: 'Open file',
+    openFileTitle: 'Open Markdown file',
+    toggleOutline: 'Toggle outline',
+    toggleTheme: 'Toggle theme',
+    github: 'Project on GitHub',
+    outline: 'Outline',
+    outlineEmpty: 'Open a document to see its sections.',
+    welcome: 'Welcome to MDreader',
+    words: 'words',
+    dropPrefix: 'Drop a Markdown file here, or',
+    browse: 'browse your files',
+    localFile: 'Local file',
+    previewDocument: 'Preview document',
+    markdownUtf8: 'Markdown · UTF-8',
+    light: 'Light',
+    dark: 'Dark',
+    languageTitle: 'Switch language',
+    chooseMarkdown: 'Please choose a Markdown file.',
+    unableToOpen: 'Unable to open this file.',
+  },
+  zh: {
+    brandCaption: '本地 Markdown',
+    openFile: '打开文件',
+    openFileTitle: '打开 Markdown 文件',
+    toggleOutline: '切换目录',
+    toggleTheme: '切换主题',
+    github: 'GitHub 项目',
+    outline: '目录',
+    outlineEmpty: '打开文档后查看章节。',
+    welcome: '欢迎使用 MDreader',
+    words: '字词',
+    dropPrefix: '拖入 Markdown 文件，或',
+    browse: '浏览文件',
+    localFile: '本地文件',
+    previewDocument: '预览文档',
+    markdownUtf8: 'Markdown · UTF-8',
+    light: '浅色',
+    dark: '深色',
+    languageTitle: '切换语言',
+    chooseMarkdown: '请选择 Markdown 文件。',
+    unableToOpen: '无法打开此文件。',
+  },
+} as const
 
 function isTauriRuntime() {
   return typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window
@@ -94,11 +174,22 @@ function App() {
   const [outlineOpen, setOutlineOpen] = useState(true)
   const [isDragging, setIsDragging] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [language, setLanguage] = useState<Language>(() => {
+    const stored = typeof window !== 'undefined' ? window.localStorage.getItem('mdreader-language') : null
+    if (stored === 'zh' || stored === 'en') return stored
+    return typeof navigator !== 'undefined' && navigator.language.toLowerCase().startsWith('zh') ? 'zh' : 'en'
+  })
   const inputRef = useRef<HTMLInputElement>(null)
 
-  const markdown = content || SAMPLE_MARKDOWN
+  const t = COPY[language]
+  const markdown = content || (language === 'zh' ? SAMPLE_MARKDOWN_ZH : SAMPLE_MARKDOWN_EN)
   const toc = useMemo(() => extractHeadings(markdown), [markdown])
   const wordCount = useMemo(() => markdown.trim().split(/\s+/).filter(Boolean).length, [markdown])
+
+  useEffect(() => {
+    window.localStorage.setItem('mdreader-language', language)
+    document.documentElement.lang = language === 'zh' ? 'zh-CN' : 'en'
+  }, [language])
 
   async function loadText(text: string, name: string, path?: string) {
     setContent(text)
@@ -124,7 +215,7 @@ function App() {
       }
       inputRef.current?.click()
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : 'Unable to open this file.')
+      setError(cause instanceof Error ? cause.message : t.unableToOpen)
     }
   }
 
@@ -141,7 +232,7 @@ function App() {
     const file = event.dataTransfer.files[0]
     if (!file) return
     if (!/\.(md|markdown|mdown)$/i.test(file.name)) {
-      setError('Please choose a Markdown file.')
+      setError(t.chooseMarkdown)
       return
     }
     await loadText(await file.text(), file.name)
@@ -157,28 +248,34 @@ function App() {
         <div className="brand-lockup">
           <div className="brand-mark"><BookOpen size={17} strokeWidth={2.2} /></div>
           <span>MDreader</span>
-          <span className="brand-caption">local Markdown</span>
+          <span className="brand-caption">{t.brandCaption}</span>
         </div>
         <div className="topbar-actions">
-          <button className="toolbar-button primary" onClick={openFile} title="Open Markdown file">
+          <button className="toolbar-button primary" onClick={openFile} title={t.openFileTitle}>
             <FolderOpen size={16} />
-            <span>Open file</span>
+            <span>{t.openFile}</span>
           </button>
-          <button className="icon-button" onClick={() => setOutlineOpen((value) => !value)} title="Toggle outline">
+          <button className="icon-button" onClick={() => setOutlineOpen((value) => !value)} title={t.toggleOutline}>
             <PanelLeft size={18} />
           </button>
-          <button className="icon-button" onClick={() => setTheme((value) => value === 'light' ? 'dark' : 'light')} title="Toggle theme">
+          <button className="icon-button" onClick={() => setTheme((value) => value === 'light' ? 'dark' : 'light')} title={t.toggleTheme}>
             {theme === 'light' ? <Moon size={18} /> : <Sun size={18} />}
           </button>
-          <a className="icon-button" href="https://github.com" target="_blank" rel="noreferrer" title="Project on GitHub">
+          <button className="language-toggle" onClick={() => setLanguage((value) => value === 'zh' ? 'en' : 'zh')} title={t.languageTitle} aria-label={t.languageTitle}>
+            <Languages size={16} />
+            <span className={language === 'zh' ? 'active' : ''}>中</span>
+            <span className="language-divider">/</span>
+            <span className={language === 'en' ? 'active' : ''}>EN</span>
+          </button>
+          <a className="icon-button" href="https://github.com" target="_blank" rel="noreferrer" title={t.github}>
             <GitBranch size={18} />
           </a>
         </div>
       </header>
 
       <div className="workspace">
-        <aside className={`outline-panel ${outlineOpen ? '' : 'collapsed'}`} aria-label="Document outline">
-          <div className="outline-heading"><List size={15} /><span>Outline</span></div>
+        <aside className={`outline-panel ${outlineOpen ? '' : 'collapsed'}`} aria-label={t.outline}>
+          <div className="outline-heading"><List size={15} /><span>{t.outline}</span></div>
           {outlineOpen && (toc.length ? (
             <nav className="outline-list">
               {toc.map((item) => (
@@ -188,23 +285,23 @@ function App() {
                 </button>
               ))}
             </nav>
-          ) : <p className="outline-empty">Open a document to see its sections.</p>)}
+          ) : <p className="outline-empty">{t.outlineEmpty}</p>)}
         </aside>
 
         <main className="reading-surface">
           <div className="document-meta">
             <div className="document-title">
               <FileText size={15} />
-              <span>{fileName ?? 'Welcome to MDreader'}</span>
+              <span>{fileName ?? t.welcome}</span>
               {filePath && <span className="document-path" title={filePath}>{filePath}</span>}
             </div>
-            <span>{wordCount.toLocaleString()} words</span>
+            <span>{wordCount.toLocaleString()} {t.words}</span>
           </div>
 
           {!content && (
             <div className={`drop-banner ${isDragging ? 'is-dragging' : ''}`} onDragEnter={() => setIsDragging(true)} onDragLeave={() => setIsDragging(false)}>
               <Upload size={16} />
-              <span>Drop a Markdown file here, or <button onClick={openFile}>browse your files</button></span>
+              <span>{t.dropPrefix} <button onClick={openFile}>{t.browse}</button></span>
             </div>
           )}
 
@@ -230,8 +327,8 @@ function App() {
       </div>
 
       <footer className="statusbar">
-        <span>{filePath ? 'Local file' : 'Preview document'}</span>
-        <span>Markdown · UTF-8 · {theme === 'light' ? 'Light' : 'Dark'} theme</span>
+        <span>{filePath ? t.localFile : t.previewDocument}</span>
+        <span>{t.markdownUtf8} · {theme === 'light' ? t.light : t.dark}</span>
       </footer>
       <input ref={inputRef} type="file" accept=".md,.markdown,.mdown,text/markdown" onChange={onInputChange} hidden />
     </div>
