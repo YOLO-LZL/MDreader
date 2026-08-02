@@ -1,8 +1,10 @@
-import { useEffect, useMemo, useRef, useState, type DragEvent, type ReactNode } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type DragEvent, type ReactNode } from 'react'
 import ReactMarkdown from 'react-markdown'
 import rehypeHighlight from 'rehype-highlight'
 import remarkGfm from 'remark-gfm'
-import { convertFileSrc } from '@tauri-apps/api/core'
+import { convertFileSrc, invoke } from '@tauri-apps/api/core'
+import { listen } from '@tauri-apps/api/event'
+import { getCurrentWebview } from '@tauri-apps/api/webview'
 import { open as openDialog } from '@tauri-apps/plugin-dialog'
 import { readTextFile } from '@tauri-apps/plugin-fs'
 import {
@@ -136,6 +138,10 @@ function isTauriRuntime() {
   return typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window
 }
 
+function isMarkdownPath(path: string) {
+  return /\.(md|markdown|mdown)$/i.test(path)
+}
+
 function slugify(value: string) {
   return value
     .toLowerCase()
@@ -191,12 +197,27 @@ function App() {
     document.documentElement.lang = language === 'zh' ? 'zh-CN' : 'en'
   }, [language])
 
-  async function loadText(text: string, name: string, path?: string) {
+  const loadText = useCallback(async (text: string, name: string, path?: string) => {
     setContent(text)
     setFileName(name)
     setFilePath(path ?? null)
     setError(null)
-  }
+  }, [])
+
+  const loadPath = useCallback(async (path: string) => {
+    if (!isMarkdownPath(path)) {
+      setError(t.chooseMarkdown)
+      return
+    }
+
+    try {
+      const text = await readTextFile(path)
+      const name = path.split(/[\\/]/).pop() ?? 'Untitled.md'
+      await loadText(text, name, path)
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : t.unableToOpen)
+    }
+  }, [loadText, t.chooseMarkdown, t.unableToOpen])
 
   async function openFile() {
     try {
@@ -208,9 +229,7 @@ function App() {
           filters: [{ name: 'Markdown', extensions: ['md', 'markdown', 'mdown'] }],
         })
         if (!selected || Array.isArray(selected)) return
-        const text = await readTextFile(selected)
-        const name = selected.split(/[\\/]/).pop() ?? 'Untitled.md'
-        await loadText(text, name, selected)
+        await loadPath(selected)
         return
       }
       inputRef.current?.click()
@@ -231,7 +250,7 @@ function App() {
     setIsDragging(false)
     const file = event.dataTransfer.files[0]
     if (!file) return
-    if (!/\.(md|markdown|mdown)$/i.test(file.name)) {
+    if (!isMarkdownPath(file.name)) {
       setError(t.chooseMarkdown)
       return
     }
@@ -241,6 +260,35 @@ function App() {
   function scrollToHeading(id: string) {
     document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
   }
+
+  useEffect(() => {
+    if (!isTauriRuntime()) return
+
+    let disposed = false
+    let unlistenOpenFiles: (() => void) | undefined
+    let unlistenDrop: (() => void) | undefined
+
+    void (async () => {
+      const initialPaths = await invoke<string[]>('initial_files')
+      if (!disposed && initialPaths[0]) await loadPath(initialPaths[0])
+
+      unlistenOpenFiles = await listen<string[]>('open-files', ({ payload }) => {
+        if (payload[0]) void loadPath(payload[0])
+      })
+
+      unlistenDrop = await getCurrentWebview().onDragDropEvent(({ payload }) => {
+        if (payload.type === 'drop' && payload.paths[0]) void loadPath(payload.paths[0])
+      })
+    })().catch((cause) => {
+      if (!disposed) setError(cause instanceof Error ? cause.message : t.unableToOpen)
+    })
+
+    return () => {
+      disposed = true
+      unlistenOpenFiles?.()
+      unlistenDrop?.()
+    }
+  }, [language, loadPath, t.unableToOpen])
 
   return (
     <div className={`app-shell ${theme}`} onDragOver={(event) => event.preventDefault()} onDrop={onDrop}>
