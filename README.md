@@ -41,4 +41,4 @@ npm run lint
 npm run build
 ```
 
-当前仓库的 Tauri 配置已准备好，但本地环境尚未安装 Rust 和 MSVC，因此只能先完成 Web MVP 构建验证，暂时不能生成 Windows 安装包。
+当前环境已安装 Rust MSVC toolchain 和 Visual Studio Build Tools。`npm run tauri:build` 已验证可生成 Windows x64 安装包：NSIS `.exe` 和 MSI `.msi`。
