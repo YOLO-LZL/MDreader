@@ -19,10 +19,7 @@
 }
 
 .markdown-syntax-marker {
-  position: relative;
-  display: inline-block;
-  width: 0;
-  height: 0;
+  display: inline;
   overflow: visible;
   pointer-events: none;
   user-select: none;
@@ -32,11 +29,10 @@
 }
 
 .markdown-syntax-marker-content {
-  position: absolute;
-  top: 0;
+  display: inline;
   color: color-mix(in srgb, var(--muted) 72%, transparent);
   font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', monospace;
-  font-size: .78em;
+  font-size: .86em;
   font-weight: 400;
   line-height: inherit;
   pointer-events: none;
@@ -44,8 +40,6 @@
   white-space: pre;
 }
 
-.markdown-syntax-marker[data-marker-side='before'] .markdown-syntax-marker-content { right: 0; }
-.markdown-syntax-marker[data-marker-side='after'] .markdown-syntax-marker-content { left: 0; }
 .dark .markdown-syntax-marker-content { color: color-mix(in srgb, var(--muted) 84%, transparent); }
 
 .markdown-editor .editor > :first-child {

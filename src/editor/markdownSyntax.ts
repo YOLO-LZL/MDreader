@@ -89,6 +89,7 @@ export const createMarkdownSyntaxPlugin = (isReadOnly: () => boolean) =>
 
           if (
             meta?.refresh ||
+            meta?.focused !== undefined ||
             tr.docChanged ||
             !tr.selection.eq(oldState.selection)
           ) {
