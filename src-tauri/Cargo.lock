@@ -1969,6 +1969,7 @@ dependencies = [
  "tauri-plugin-fs",
  "tauri-plugin-log",
  "tauri-plugin-single-instance",
+ "url",
 ]
 
 [[package]]

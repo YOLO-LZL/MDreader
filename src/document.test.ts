@@ -5,6 +5,7 @@ import {
   extractHeadings,
   isDirty,
   isMarkdownPath,
+  normalizeFilePath,
   normalizeLocalFilePath,
   resolveLocalImagePath,
 } from './document'
@@ -32,6 +33,23 @@ describe('document helpers', () => {
   it('normalizes relative image paths next to the Markdown file', () => {
     expect(normalizeLocalFilePath('C:/notes/docs/../images/pic.png')).toBe('C:\\notes\\images\\pic.png')
     expect(resolveLocalImagePath('assets/pic%20one.png?raw=1', 'C:\\notes\\readme.md')).toBe('C:\\notes\\assets\\pic one.png?raw=1')
+  })
+
+  it('keeps Windows path keys case-insensitive while preserving POSIX case and roots', () => {
+    expect(normalizeFilePath('C:/Notes/Docs/../Readme.md')).toBe('c:\\notes\\readme.md')
+    expect(normalizeFilePath('C:\\NOTES\\README.MD')).toBe('c:\\notes\\readme.md')
+    expect(normalizeFilePath('\\\\Server\\Share\\Folder\\..\\Readme.md')).toBe('\\\\server\\share\\readme.md')
+    expect(normalizeFilePath('/Users/Alice/Docs/../Readme.md')).toBe('/Users/Alice/Readme.md')
+    expect(normalizeLocalFilePath('/../')).toBe('/')
+  })
+
+  it('resolves POSIX relative images, encoded names, and URL suffixes', () => {
+    expect(resolveLocalImagePath('../assets/pic%20one.png?raw=1#preview', '/Users/Alice/docs/readme.md'))
+      .toBe('/Users/Alice/assets/pic one.png?raw=1#preview')
+    expect(resolveLocalImagePath('./images/../pic%20two.png', '/Users/Alice/readme.md'))
+      .toBe('/Users/Alice/pic two.png')
+    expect(resolveLocalImagePath('/Users/Alice/docs/../pic%20three.png', '/Users/Alice/readme.md'))
+      .toBe('/Users/Alice/pic three.png')
   })
 
   it('validates supported Markdown extensions and save errors', () => {

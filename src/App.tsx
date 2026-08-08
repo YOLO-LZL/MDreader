@@ -41,7 +41,7 @@ import {
   extractHeadings,
   isDirty as hasUnsavedChanges,
   isMarkdownPath,
-  normalizeWindowsPath,
+  normalizeFilePath,
   type RecentFile,
   type TocItem,
 } from './document'
@@ -288,7 +288,7 @@ function readRecentFiles(): RecentFile[] {
       if (!value || typeof value !== 'object') return []
       const candidate = value as { name?: unknown; path?: unknown }
       if (typeof candidate.name !== 'string' || typeof candidate.path !== 'string' || !candidate.name.trim() || !candidate.path.trim()) return []
-      const key = normalizeWindowsPath(candidate.path)
+      const key = normalizeFilePath(candidate.path)
       if (!key || seen.has(key)) return []
       seen.add(key)
       return [{ name: candidate.name, path: candidate.path }]
@@ -457,16 +457,16 @@ function App() {
 
   const rememberRecentFile = useCallback((path: string, name: string) => {
     const recentFile = { name, path }
-    const key = normalizeWindowsPath(path)
+    const key = normalizeFilePath(path)
     setRecentFiles((previous) => [
       recentFile,
-      ...previous.filter((item) => normalizeWindowsPath(item.path) !== key),
+      ...previous.filter((item) => normalizeFilePath(item.path) !== key),
     ].slice(0, MAX_RECENT_FILES))
   }, [])
 
   const removeRecentFile = useCallback((path: string) => {
-    const key = normalizeWindowsPath(path)
-    setRecentFiles((previous) => previous.filter((item) => normalizeWindowsPath(item.path) !== key))
+    const key = normalizeFilePath(path)
+    setRecentFiles((previous) => previous.filter((item) => normalizeFilePath(item.path) !== key))
   }, [])
 
   const loadText = useCallback((text: string, name: string | null, path: string | null, sample = false) => {
@@ -571,6 +571,15 @@ function App() {
   const requestOpenPath = useCallback((path: string, options?: { removeOnFailure?: boolean }) => {
     requestAction(() => loadPath(path, options))
   }, [loadPath, requestAction])
+
+  const drainPendingFiles = useCallback(async () => {
+    try {
+      const pendingPaths = await invoke<string[]>('take_pending_files')
+      if (pendingPaths[0]) requestOpenPath(pendingPaths[0])
+    } catch (cause) {
+      setError(errorMessage(cause, copyRef.current.unableToOpen))
+    }
+  }, [requestOpenPath])
 
   const openFile = useCallback(async () => {
     try {
@@ -702,16 +711,23 @@ function App() {
     let unlistenDrop: (() => void) | undefined
 
     void (async () => {
-      const initialPaths = await invoke<string[]>('initial_files')
+      const cleanupOpenFiles = await listen('open-files', () => {
+        if (!disposed) void drainPendingFiles()
+      })
+      if (disposed) cleanupOpenFiles()
+      else unlistenOpenFiles = cleanupOpenFiles
+
+      const cleanupDrop = await getCurrentWebview().onDragDropEvent(({ payload }) => {
+        if (disposed || payload.type !== 'drop' || !payload.paths.length) return
+        void invoke('enqueue_pending_files', { paths: payload.paths }).catch((cause) => {
+          if (!disposed) setError(errorMessage(cause, copyRef.current.unableToOpen))
+        })
+      })
+      if (disposed) cleanupDrop()
+      else unlistenDrop = cleanupDrop
+
+      const initialPaths = await invoke<string[]>('take_pending_files')
       if (!disposed && initialPaths[0]) await loadPath(initialPaths[0])
-
-      unlistenOpenFiles = await listen<string[]>('open-files', ({ payload }) => {
-        if (payload[0]) requestOpenPath(payload[0])
-      })
-
-      unlistenDrop = await getCurrentWebview().onDragDropEvent(({ payload }) => {
-        if (payload.type === 'drop' && payload.paths[0]) requestOpenPath(payload.paths[0])
-      })
     })().catch((cause) => {
       if (!disposed) setError(errorMessage(cause, copyRef.current.unableToOpen))
     })
@@ -721,7 +737,7 @@ function App() {
       unlistenOpenFiles?.()
       unlistenDrop?.()
     }
-  }, [loadPath, requestOpenPath])
+  }, [drainPendingFiles, loadPath])
 
   useEffect(() => {
     if (!isTauriRuntime()) return
@@ -833,10 +849,10 @@ function App() {
               {recentOpen && (recentFiles.length ? (
                 <nav id="recent-files-list" className="recent-list" aria-label={copy.recentFiles}>
                   {recentFiles.map((item) => {
-                    const isCurrent = Boolean(filePath && normalizeWindowsPath(filePath) === normalizeWindowsPath(item.path))
+                    const isCurrent = Boolean(filePath && normalizeFilePath(filePath) === normalizeFilePath(item.path))
                     return (
                       <button
-                        key={normalizeWindowsPath(item.path)}
+                        key={normalizeFilePath(item.path)}
                         className={`recent-file-item ${isCurrent ? 'active' : ''}`}
                         onClick={() => requestOpenPath(item.path, { removeOnFailure: true })}
                         title={item.path}

@@ -1,9 +1,73 @@
 export type TocItem = { id: string; label: string; level: number }
 export type RecentFile = { name: string; path: string }
 
-export function normalizeWindowsPath(path: string) {
-  const normalized = path.trim().replace(/\//g, '\\')
-  return (normalized.length > 3 ? normalized.replace(/[\\]+$/, '') : normalized).toLowerCase()
+export type FilePathStyle = 'windows' | 'posix'
+
+function inferFilePathStyle(path: string): FilePathStyle {
+  if (/^[A-Za-z]:[\\/]/.test(path) || /^\\\\/.test(path)) return 'windows'
+  return !path.startsWith('/') && path.includes('\\') ? 'windows' : 'posix'
+}
+
+function normalizeWindowsLocalFilePath(path: string) {
+  const normalized = path.replace(/\//g, '\\')
+  const drive = /^[A-Za-z]:/.exec(normalized)?.[0] ?? ''
+  const driveAbsolute = Boolean(drive && normalized[2] === '\\')
+  const isUnc = normalized.startsWith('\\\\')
+  const isRootRelative = !drive && !isUnc && normalized.startsWith('\\')
+  const prefix = drive
+    ? `${drive}${driveAbsolute ? '\\' : ''}`
+    : isUnc
+      ? '\\\\'
+      : isRootRelative
+      ? '\\'
+      : ''
+  const body = normalized.slice(prefix.length)
+  const segments: string[] = []
+  const protectedSegments = isUnc ? 2 : 0
+
+  for (const segment of body.split('\\')) {
+    if (!segment || segment === '.') continue
+    if (segment === '..') {
+      if (segments.length > protectedSegments && segments[segments.length - 1] !== '..') {
+        segments.pop()
+      } else if (!prefix) {
+        segments.push(segment)
+      }
+      continue
+    }
+    segments.push(segment)
+  }
+
+  return `${prefix}${segments.join('\\')}` || (prefix || '.')
+}
+
+function normalizePosixLocalFilePath(path: string) {
+  const absolute = path.startsWith('/')
+  const segments: string[] = []
+
+  for (const segment of path.split('/')) {
+    if (!segment || segment === '.') continue
+    if (segment === '..') {
+      if (segments.length && segments[segments.length - 1] !== '..') segments.pop()
+      else if (!absolute) segments.push(segment)
+      continue
+    }
+    segments.push(segment)
+  }
+
+  const body = segments.join('/')
+  if (absolute) return body ? `/${body}` : '/'
+  return body || (path ? '.' : '')
+}
+
+export function normalizeLocalFilePath(path: string, style: FilePathStyle = inferFilePathStyle(path)) {
+  return style === 'windows' ? normalizeWindowsLocalFilePath(path) : normalizePosixLocalFilePath(path)
+}
+
+export function normalizeFilePath(path: string) {
+  const style = inferFilePathStyle(path.trim())
+  const normalized = normalizeLocalFilePath(path.trim(), style)
+  return style === 'windows' ? normalized.toLowerCase() : normalized
 }
 
 export function isMarkdownPath(path: string) {
@@ -22,35 +86,22 @@ export function decodeFilePath(path: string) {
   }
 }
 
-export function normalizeLocalFilePath(path: string) {
-  const normalized = path.replace(/\//g, '\\')
-  const drive = /^[A-Za-z]:/.exec(normalized)?.[0] ?? ''
-  const isUnc = normalized.startsWith('\\\\')
-  const prefix = drive || (isUnc ? '\\\\' : '')
-  const body = normalized.slice(prefix.length)
-  const segments: string[] = []
-
-  for (const segment of body.split('\\')) {
-    if (!segment || segment === '.') continue
-    if (segment === '..' && segments.length && segments[segments.length - 1] !== '..') {
-      segments.pop()
-      continue
-    }
-    segments.push(segment)
-  }
-
-  const separator = prefix && !prefix.endsWith('\\') ? '\\' : ''
-  return `${prefix}${separator}${segments.join('\\')}`
-}
-
 export function resolveLocalImagePath(source: string, documentPath: string | null) {
   const separatorIndex = source.search(/[?#]/)
   const pathPart = separatorIndex >= 0 ? source.slice(0, separatorIndex) : source
   const suffix = separatorIndex >= 0 ? source.slice(separatorIndex) : ''
   const decodedPath = decodeFilePath(pathPart)
-  const resolvedPath = isAbsoluteFilePath(decodedPath) || !documentPath
-    ? decodedPath
-    : normalizeLocalFilePath(`${documentPath.replace(/[\\/][^\\/]*$/, '')}\\${decodedPath}`)
+  const style = documentPath ? inferFilePathStyle(documentPath) : inferFilePathStyle(decodedPath)
+  const lastSeparator = documentPath
+    ? Math.max(documentPath.lastIndexOf('/'), documentPath.lastIndexOf('\\'))
+    : -1
+  const documentDirectory = documentPath && lastSeparator >= 0 ? documentPath.slice(0, lastSeparator) : ''
+  const separator = style === 'windows' ? '\\' : '/'
+  const resolvedPath = isAbsoluteFilePath(decodedPath)
+    ? normalizeLocalFilePath(decodedPath, inferFilePathStyle(decodedPath))
+    : !documentPath
+      ? decodedPath
+      : normalizeLocalFilePath(`${documentDirectory}${separator}${decodedPath}`, style)
 
   return `${resolvedPath}${suffix}`
 }

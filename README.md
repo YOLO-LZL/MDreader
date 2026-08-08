@@ -1,6 +1,6 @@
 # MDreader
 
-一个 Windows 优先、离线优先的本地 Markdown 阅读器 MVP，界面借鉴 Typora 的克制阅读体验。
+一个离线优先的本地 Markdown 阅读器，支持 Windows 和 macOS Apple Silicon，界面借鉴 Typora 的克制阅读体验。
 
 ## 已实现
 
@@ -19,7 +19,7 @@
 
 点击文档上方的“编辑”进入所见即所得模式。编辑器仍以 Markdown 作为持久化格式，GFM 表格、任务列表、围栏代码和相对图片会在保存后继续保持语义。
 
-- `Ctrl+S` 保存当前文档；没有原文件路径时会打开“另存为”对话框。
+- `Ctrl+S`（macOS 也支持 `⌘S`）保存当前文档；没有原文件路径时会打开“另存为”对话框。
 - 浏览器模式不能覆盖本地文件，保存会下载一个 Markdown 副本。
 - 打开文件、拖放文件、文件关联事件和关闭窗口都会在存在修改时提供“保存 / 放弃 / 取消”。
 - `Ctrl+Z` 和 `Ctrl+Shift+Z` 由编辑器处理；工具栏按钮也支持撤销和重做。
@@ -38,9 +38,26 @@ npm run dev
 ```bash
 npm run tauri:dev
 npm run tauri:build
+npm run tauri:build:mac
 ```
 
-Windows 打包需要 Rust、Cargo 和 Visual Studio Build Tools（MSVC + Windows SDK）。构建目标配置为 NSIS `.exe` 和 MSI 安装包。
+`npm run tauri:dev` 会在当前平台启动桌面应用。`npm run tauri:build` 使用当前平台的全部原生打包目标：Windows 生成 NSIS `.exe` 和 MSI 安装包，macOS 生成 `.app` 和 `.dmg`。
+
+Windows 打包需要 Rust、Cargo 和 Visual Studio Build Tools（MSVC + Windows SDK）。
+
+macOS Apple Silicon 打包需要 Rust stable、`aarch64-apple-darwin` target、Xcode Command Line Tools 和 macOS 11.0 或更高版本。专用命令固定使用 arm64 target：
+
+```bash
+npm run tauri:build:mac
+```
+
+产物位置：
+
+- macOS 应用：`src-tauri/target/aarch64-apple-darwin/release/bundle/macos/MDreader.app`
+- macOS 安装镜像：`src-tauri/target/aarch64-apple-darwin/release/bundle/dmg/`
+- Windows 产物：`src-tauri/target/<windows-target>/release/bundle/`
+
+本项目约定 macOS 应用不签名、不公证。首次打开未公证的 `MDreader.app` 时，如果 Gatekeeper 阻止启动，请在 Finder 中右键应用并选择“打开”，再确认一次。Markdown 文件关联会保留，`.md`、`.markdown` 和 `.mdown` 文件可以从 Finder 的“打开方式”中选择 MDreader。
 
 ## 架构说明
 
@@ -52,6 +69,13 @@ Windows 打包需要 Rust、Cargo 和 Visual Studio Build Tools（MSVC + Windows
 npm run lint
 npm run test
 npm run build
+cargo fmt --manifest-path src-tauri/Cargo.toml --check
+cargo test --manifest-path src-tauri/Cargo.toml
 ```
 
-当前环境已安装 Rust MSVC toolchain 和 Visual Studio Build Tools。`npm run tauri:build` 可生成 Windows x64 安装包：NSIS `.exe` 和 MSI `.msi`。
+macOS 产物可用以下命令检查 DMG 和可执行文件架构：
+
+```bash
+hdiutil verify src-tauri/target/aarch64-apple-darwin/release/bundle/dmg/*.dmg
+file src-tauri/target/aarch64-apple-darwin/release/bundle/macos/MDreader.app/Contents/MacOS/mdreader
+```

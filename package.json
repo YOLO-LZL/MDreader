@@ -10,7 +10,8 @@
     "test": "vitest run",
     "preview": "vite preview",
     "tauri:dev": "tauri dev",
-    "tauri:build": "tauri build"
+    "tauri:build": "tauri build",
+    "tauri:build:mac": "tauri build --target aarch64-apple-darwin --bundles app,dmg --no-sign"
   },
   "dependencies": {
     "@milkdown/kit": "^7.22.0",

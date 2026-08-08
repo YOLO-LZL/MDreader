@@ -30,6 +30,10 @@ import type { Ctx } from '@milkdown/kit/ctx'
 import { Milkdown, MilkdownProvider, useEditor } from '@milkdown/react'
 import { convertFileSrc } from '@tauri-apps/api/core'
 import { isAbsoluteFilePath, resolveLocalImagePath } from '../document'
+import {
+  createMarkdownSyntaxPlugin,
+  markdownSyntaxPluginKey,
+} from './markdownSyntax'
 import './MarkdownEditor.css'
 
 export type EditorCommand =
@@ -140,6 +144,7 @@ function EditorCanvas({
       .use(gfm)
       .use(prism)
       .use(history)
+      .use(createMarkdownSyntaxPlugin(() => readOnlyRef.current))
       .use(listener),
     [documentKey],
   )
@@ -150,7 +155,9 @@ function EditorCanvas({
     if (!instance) return
 
     instance.action((ctx) => {
-      ctx.get(editorViewCtx).setProps({ editable: () => !readOnlyRef.current })
+      const view = ctx.get(editorViewCtx)
+      view.setProps({ editable: () => !readOnlyRef.current })
+      view.dispatch(view.state.tr.setMeta(markdownSyntaxPluginKey, { refresh: true }))
     })
   }, [editor, editor.loading, readOnly])
 
